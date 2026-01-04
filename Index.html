@@ -1,0 +1,443 @@
+
+<!dDOCTYPE html>
+<html lang="de">
+<head>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#003a8f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Entgelt">
+<link rel="apple-touch-icon" href="icon-192.png">	
+<meta charset="UTF-8">
+<title>Berechnung Entgeld Erhöhung</title>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+<style>
+body{font-family:Segoe UI,Arial;background:#f4f6f8;margin:0}
+.app-header{background:#003a8f;color:#fff;padding:18px;text-align:center;border-bottom:4px solid #f2b705}
+.subtitle{color:#f2b705;font-size:14px;margin-top:4px}
+.container{display:flex;justify-content:center;margin:20px}
+.block{background:#fff;width:1000px;padding:20px;border-radius:6px;
+box-shadow:0 4px 10px rgba(0,0,0,.08);border-top:5px solid #003a8f}
+.controls{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:20px}
+label{font-weight:600;color:#003a8f}
+select,input{padding:6px;margin-top:4px;min-width:170px}
+h3{color:#003a8f;margin-top:25px}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th{background:#003a8f;color:#fff;padding:8px}
+td{border:1px solid #ddd;padding:7px;text-align:right}
+td.left{text-align:left}
+tr:nth-child(even) td{background:#f8f9fb}
+button{padding:10px 18px;background:#003a8f;color:#fff;border:none;
+border-radius:4px;cursor:pointer;margin-top:8px}
+button:hover{background:#002d6e}
+.diff-positive{color:#1a7f37;font-weight:600}
+.increase-step{margin-bottom:10px}
+.table-wrapper{overflow-x:auto}
+
+/* Zusammenfassung */
+.summary-box{
+margin-top:30px;
+border:2px solid #003a8f;
+border-radius:6px;
+padding:15px;
+background:#f8f9fb
+}
+.summary-box h3{margin-top:0}
+.summary-grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+gap:12px
+}
+.summary-item{
+background:#fff;
+border:1px solid #ddd;
+border-radius:4px;
+padding:10px
+}
+.summary-label{font-size:13px;color:#555}
+.summary-value{font-weight:600;margin-top:4px}
+
+@media(max-width:900px){.block{width:100%}}
+@media(max-width:600px){
+.controls{flex-direction:column}
+button{width:100%}
+table{min-width:600px}
+}
+/* ===== UX Ergänzungen – PATCH ===== */
+
+/* Hinweisboxen */
+.info-box{
+  background:#eef4ff;
+  border-left:4px solid #003a8f;
+  padding:10px;
+  margin:10px 0;
+  font-size:14px;
+}
+
+/* Touch-Optimierung */
+select, input, button{
+  min-height:44px;
+  font-size:16px;
+}
+
+/* iPad / Mobile Layout */
+.controls{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:16px;
+}
+
+/* Tabellen scrollbar auf Touch-Geräten */
+.table-wrapper{
+  overflow-x:auto;
+}
+
+/* Mobile Feinheiten */
+@media(max-width:600px){
+  button{width:100%}
+}
+/* ===== Statusanzeige ===== */
+.status-box{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:10px;
+  margin:15px 0;
+}
+
+.status-item{
+  border:1px solid #ddd;
+  border-radius:4px;
+  padding:8px 10px;
+  font-size:14px;
+  background:#f8f9fb;
+}
+
+.status-ok{
+  border-left:5px solid #1a7f37;
+}
+
+.status-wait{
+  border-left:5px solid #c98a00;
+}
+
+.status-label{
+  font-weight:600;
+}
+</style>
+</head>
+
+<body>
+<div class="app-header">
+<h1>Berechnung Entgeld Erhöhung</h1>
+<div class="subtitle">auf Basis der aktuellen Entgelttabelle</div>
+</div>
+
+<div class="container">
+<div class="block" id="pdfContent">
+
+<!-- BLOCK 1 -->
+<div class="controls">
+<div>
+
+<label>Excel-Datei</label><br>
+<input type="file" id="fileInput">
+</div>
+<div>
+<label>Wochenarbeitszeit</label><br>
+<select id="hoursSelect">
+<script>
+for(let i=30;i<=42;i++)document.write(`<option value="${i}">${i} h / Woche</option>`);
+</script>
+</select>
+</div>
+<div>
+<label>Tarifstand</label><br>
+<input type="date" id="tarifDate">
+</div>
+<div>
+<label>Entgeltgruppe</label><br>
+<select id="egSelect" disabled></select>
+</div>
+<div class="info-box">
+Excel-Datei laden, Wochenarbeitszeit auswählen und Entgeltgruppe festlegen.
+</div>	
+</div>
+
+<div id="output"></div>
+<div class="status-box" id="statusBox">
+  <div class="status-item status-wait" id="statusExcel">
+    <div class="status-label">Excel-Datei</div>
+    <div>nicht geladen</div>
+  </div>
+  <div class="status-item status-wait" id="statusEG">
+    <div class="status-label">Entgeltgruppe</div>
+    <div>nicht gewählt</div>
+  </div>
+  <div class="status-item status-wait" id="statusIncrease">
+    <div class="status-label">Erhöhung</div>
+    <div>nicht berechnet</div>
+  </div>
+  <div class="status-item status-wait" id="statusReduction">
+    <div class="status-label">Arbeitszeitreduzierung</div>
+    <div>nicht berechnet</div>
+  </div>
+</div>
+
+<!-- BLOCK 2 -->
+<hr>
+<h3>Erhöhungsschritte</h3>
+<div class="info-box">
+Mehrere Erhöhungsschritte möglich – jeder Schritt wird auf den vorherigen aufgerechnet.
+</div>
+<div id="increaseBlock"></div>
+<button onclick="addIncreaseStep()">+ Schritt hinzufügen</button>
+<button onclick="applyIncreases()">Erhöhung berechnen</button>
+
+<!-- BLOCK 3 -->
+<hr>
+<h3>Arbeitszeitreduzierung (voller Lohnausgleich)</h3>
+<div class="info-box">
+Der Monatslohn bleibt gleich – der Stundenlohn steigt durch reduzierte Wochenarbeitszeit.
+</div>
+<label>Berechnungsbasis</label><br>
+<select id="reductionBase">
+<option value="base">aktueller Tariflohn (Block 1)</option>
+<option value="increase">letzter Erhöhungsstand (Block 2)</option>
+</select>
+
+<div id="reductionSteps"></div>
+<button onclick="addReductionStep()">+ Reduzierungsschritt</button>
+<button onclick="applyReduction()">Reduzierung berechnen</button>
+
+<!-- BLOCK 4 – ZUSAMMENFASSUNG -->
+<hr>
+<div id="summary"></div>
+<div class="info-box">
+PDF-Ausgabe: Die dargestellten Werte basieren auf den eingegebenen Parametern 
+und stellen keine rechtsverbindliche Entgeltabrechnung dar.
+</div>
+<hr>
+<button onclick="exportPDF()">PDF erstellen</button>
+<div class="info-box">
+Hinweis: Alle Beträge werden kaufmännisch auf zwei Dezimalstellen gerundet. 
+Die Berechnung dient der Orientierung und ersetzt keine verbindliche Abrechnung.
+</div>
+
+</div>
+</div>
+
+<script>
+let egData={},lastIncreaseResult=null,lastReductionResult=null;
+
+function calcHour(month,h){return month/(h*4.35)}
+
+function addIncreaseStep(){
+const d=document.createElement("div");
+d.className="increase-step";
+d.innerHTML=`<select>
+<option value="percent">%</option>
+<option value="fixed">€</option>
+</select>
+<input type="number" step="0.01">`;
+increaseBlock.appendChild(d);
+}
+addIncreaseStep();
+
+function addReductionStep(){
+const d=document.createElement("div");
+d.className="increase-step";
+d.innerHTML=`Ziel-Wochenarbeitszeit:
+<input type="number" step="0.1">`;
+reductionSteps.appendChild(d);
+}
+addReductionStep();
+
+/* Excel */
+fileInput.onchange=e=>{
+const r=new FileReader();
+r.onload=ev=>{
+const wb=XLSX.read(new Uint8Array(ev.target.result),{type:"array"});
+const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1});
+egData={};
+for(let i=0;i<rows.length;i+=2){
+if(!rows[i]||!rows[i][0])continue;
+egData[rows[i][0]]=[];
+for(let c=1;c<rows[i].length;c++)
+if(rows[i][c])egData[rows[i][0]].push({stufe:"Stufe "+c,monatslohn:+rows[i][c]});
+}
+egSelect.innerHTML="<option value=''>EG auswählen</option>";
+Object.keys(egData).forEach(e=>egSelect.innerHTML+=`<option>${e}</option>`);
+egSelect.disabled=false;
+};
+r.readAsArrayBuffer(e.target.files[0]);
+};
+
+egSelect.onchange=()=>{
+const eg=egSelect.value,h=+hoursSelect.value;
+let html=`<h3>${eg}</h3><div class="table-wrapper"><table>
+<tr><th class="left">Stufe</th><th>Monat</th><th>Std.</th></tr>`;
+egData[eg].forEach(i=>html+=`<tr>
+<td class="left">${i.stufe}</td>
+<td>${i.monatslohn.toFixed(2)}</td>
+<td>${calcHour(i.monatslohn,h).toFixed(2)}</td></tr>`);
+html+="</table></div>";
+output.innerHTML=html;
+summary.innerHTML="";
+};
+
+/* Block 2 */
+function applyIncreases(){
+const eg=egSelect.value;if(!eg)return;
+let base=JSON.parse(JSON.stringify(egData[eg]));
+let result=JSON.parse(JSON.stringify(egData[eg]));
+document.querySelectorAll("#increaseBlock .increase-step").forEach(s=>{
+const t=s.children[0].value,v=parseFloat(s.children[1].value);
+if(isNaN(v))return;
+result.forEach(r=>r.monatslohn=t==="percent"?r.monatslohn*(1+v/100):r.monatslohn+v);
+});
+lastIncreaseResult=result;
+renderIncreaseTable(eg,base,result);
+renderSummary(eg,base,result,null);
+}
+
+function renderIncreaseTable(eg,base,res){
+const h=+hoursSelect.value;
+let html=`<h3>${eg} – Gesamterhöhung</h3><div class="table-wrapper"><table>
+<tr><th class="left">Stufe</th><th>Monat alt</th><th>Monat neu</th><th>Δ €</th><th>Δ %</th><th>Std. neu</th></tr>`;
+res.forEach((n,i)=>{
+const b=base[i],d=n.monatslohn-b.monatslohn;
+html+=`<tr>
+<td class="left">${n.stufe}</td>
+<td>${b.monatslohn.toFixed(2)}</td>
+<td class="diff-positive">${n.monatslohn.toFixed(2)}</td>
+<td class="diff-positive">${d.toFixed(2)}</td>
+<td class="diff-positive">${(d/b.monatslohn*100).toFixed(2)}%</td>
+<td class="diff-positive">${calcHour(n.monatslohn,h).toFixed(2)}</td></tr>`;
+});
+html+="</table></div>";
+output.innerHTML+=html;
+}
+
+/* Block 3 */
+function applyReduction(){
+const eg=egSelect.value;
+let data=reductionBase.value==="increase"&&lastIncreaseResult
+?JSON.parse(JSON.stringify(lastIncreaseResult))
+:JSON.parse(JSON.stringify(egData[eg]));
+let hours=+hoursSelect.value;
+document.querySelectorAll("#reductionSteps input").forEach(inp=>{
+const newH=parseFloat(inp.value);
+if(isNaN(newH))return;
+hours=newH;
+});
+lastReductionResult={data,hours};
+renderSummary(eg,egData[eg],data,hours);
+}
+
+/* Zusammenfassung */
+function renderSummary(eg,base,finalData,finalHours){
+if(!finalData)return;
+const baseHours=+hoursSelect.value;
+let html=`<div class="summary-box"><h3>Zusammenfassung – ${eg}</h3><div class="summary-grid">`;
+finalData.forEach((n,i)=>{
+const b=base[i];
+const baseHour=calcHour(b.monatslohn,baseHours);
+const endHour=calcHour(n.monatslohn,finalHours||baseHours);
+const diffM=n.monatslohn-b.monatslohn;
+const diffMP=diffM/b.monatslohn*100;
+const diffHP=(endHour-baseHour)/baseHour*100;
+html+=`
+<div class="summary-item">
+<div class="summary-label">${n.stufe}</div>
+<div class="summary-value">
+Monat: ${n.monatslohn.toFixed(2)} €<br>
+Δ Monat: ${diffM.toFixed(2)} € (${diffMP.toFixed(2)}%)<br>
+Std.: ${endHour.toFixed(2)} €<br>
+Δ Std.: ${diffHP.toFixed(2)}%
+</div>
+</div>`;
+});
+html+="</div></div>";
+summary.innerHTML=html;
+}
+
+/* PDF */
+async function exportPDF(){
+const {jsPDF}=window.jspdf;
+const c=await html2canvas(pdfContent,{scale:2});
+const img=c.toDataURL("image/png");
+const pdf=new jsPDF("p","mm","a4");
+const w=pdf.internal.pageSize.getWidth();
+const h=c.height*w/c.width;
+let y=0,left=h;
+pdf.addImage(img,"PNG",0,0,w,h);
+left-=pdf.internal.pageSize.getHeight();
+while(left>0){
+y-=pdf.internal.pageSize.getHeight();
+pdf.addPage();
+pdf.addImage(img,"PNG",0,y,w,h);
+left-=pdf.internal.pageSize.getHeight();
+}
+pdf.save("Berechnung_Entgelt_Zusammenfassung.pdf");
+}
+/* ===== Statusanzeige – PATCH ===== */
+
+function setStatus(id, text, ok){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.classList.remove("status-ok","status-wait");
+  el.classList.add(ok ? "status-ok" : "status-wait");
+  el.querySelector("div:last-child").innerText=text;
+}
+
+/* Excel geladen */
+fileInput.addEventListener("change",()=>{
+  setStatus("statusExcel","geladen",true);
+});
+
+/* EG gewählt */
+egSelect.addEventListener("change",()=>{
+  if(egSelect.value){
+    setStatus("statusEG","gewählt",true);
+  }
+});
+
+/* Erhöhung berechnet */
+const _applyIncreases = applyIncreases;
+applyIncreases = function(){
+  _applyIncreases();
+  setStatus("statusIncrease","berechnet",true);
+};
+
+/* Arbeitszeitreduzierung berechnet */
+const _applyReduction = applyReduction;
+applyReduction = function(){
+  _applyReduction();
+  setStatus("statusReduction","berechnet",true);
+};
+/* ===== UX Fokus-Sprung – PATCH 6 ===== */
+function scrollToElement(id){
+  const el=document.getElementById(id);
+  if(el){
+    el.scrollIntoView({behavior:"smooth", block:"start"});
+  }
+}
+
+/* Nach EG-Auswahl */
+egSelect.addEventListener("change",()=>{
+  scrollToElement("output");
+});
+/* ===== PWA Service Worker ===== */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js");
+  });
+}
+</script>
+
+</body>
+</html>
