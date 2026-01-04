@@ -1,17 +1,10 @@
-const CACHE_NAME = "entgelt-pwa";
+const CACHE_NAME = "entgelt-pwa-v2";
+
 const ASSETS = [
   "./",
   "./manifest.json"
 ];
 
-self.addEventListener("install", e => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(c => c.addAll(ASSETS))
-  );
-});
-
-self.addEventListener("fetch", e => {
-  e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request))
-  );
+self.addEventListener("fetch", event => {
+  event.respondWith(fetch(event.request));
 });
