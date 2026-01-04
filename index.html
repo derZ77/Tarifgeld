@@ -1,22 +1,19 @@
 
 <!DOCTYPE html>
-
 <html lang="de">
-<head>	
+<head>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#003a8f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Entgelt">
+<link rel="apple-touch-icon" href="icon-192.png">	
 <meta charset="UTF-8">
 <title>Berechnung Entgeld Erhöhung</title>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#003a8f">
-
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Entgelt">
-<link rel="apple-touch-icon" href="icon-192.png">
 
 <style>
 body{font-family:Segoe UI,Arial;background:#f4f6f8;margin:0}
@@ -134,8 +131,12 @@ select, input, button{
 </head>
 
 <body>
+
 <div class="app-header">
 <h1>Berechnung Entgeld Erhöhung</h1>
+<div class="info-box">
+Excel-Datei laden, Wochenarbeitszeit auswählen und Entgeltgruppe festlegen.
+</div>
 <div class="subtitle">auf Basis der aktuellen Entgelttabelle</div>
 </div>
 
@@ -434,14 +435,13 @@ function scrollToElement(id){
 egSelect.addEventListener("change",()=>{
   scrollToElement("output");
 });
-}
-</script>
-<script>
+/* ===== PWA Service Worker ===== */
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./service-worker.js");
   });
 }
 </script>
+
 </body>
 </html>
